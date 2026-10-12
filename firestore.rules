@@ -1,0 +1,27 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Each user can read/write only their own profile (email + push tokens).
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Tickets: the owner has full control; invited people (matched by email) can read.
+    match /tickets/{ticketId} {
+      allow create: if request.auth != null
+                    && request.resource.data.ownerId == request.auth.uid;
+      allow read: if request.auth != null
+                  && (resource.data.ownerId == request.auth.uid
+                      || request.auth.token.email.lower() in resource.data.memberEmails);
+      allow update, delete: if request.auth != null
+                            && resource.data.ownerId == request.auth.uid;
+    }
+
+    // Notification requests are write-only from the client; a Cloud Function consumes them.
+    match /notifications/{id} {
+      allow create: if request.auth != null;
+      allow read, update, delete: if false;
+    }
+  }
+}
