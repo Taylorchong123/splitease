@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/currencies.dart';
 import '../../core/money.dart';
@@ -70,6 +72,24 @@ class _TicketBody extends ConsumerWidget {
     await ref.read(ticketRepositoryProvider).save(ticket.copyWith(participants: ps).recalculated());
   }
 
+  Future<void> _launchEmailApp(Participant p, Ticket ticket) async {
+    final subject = 'Payment Reminder: ${ticket.title.isEmpty ? 'Bill' : ticket.title}';
+    final body = NotificationService.formatEmailBreakdown(ticket, p);
+
+    final mailUri = Uri(
+      scheme: 'mailto',
+      path: p.email,
+      queryParameters: {
+        'subject': subject,
+        'body': body,
+      },
+    );
+
+    if (await canLaunchUrl(mailUri)) {
+      await launchUrl(mailUri);
+    }
+  }
+
   Future<void> _notify(BuildContext context, WidgetRef ref) async {
     await ref.read(ticketRepositoryProvider).queueNotifications(ticket);
     if (!context.mounted) return;
@@ -78,59 +98,89 @@ class _TicketBody extends ConsumerWidget {
 
     showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       builder: (ctx) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('Payment Reminders Queued', style: Theme.of(ctx).textTheme.titleMedium),
-              const SizedBox(height: 8),
-              Text(
-                'Notifications and email reminders with bill breakdowns were queued for ${unpaid.length} participant(s).',
-                style: Theme.of(ctx).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 16),
-              Text('View / Copy Email Breakdown:', style: Theme.of(ctx).textTheme.labelLarge),
-              const SizedBox(height: 8),
-              for (final p in unpaid) ...[
-                ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.email_outlined),
-                  title: Text(p.name),
-                  subtitle: Text(p.email),
-                  trailing: TextButton.icon(
-                    icon: const Icon(Icons.description_outlined, size: 18),
-                    label: const Text('Breakdown'),
-                    onPressed: () {
-                      final text = NotificationService.formatEmailBreakdown(ticket, p);
-                      showDialog<void>(
-                        context: ctx,
-                        builder: (dCtx) => AlertDialog(
-                          title: Text('Email for ${p.name}'),
-                          content: SingleChildScrollView(
-                            child: SelectableText(text),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('Payment Reminders Queued', style: Theme.of(ctx).textTheme.titleMedium),
+                const SizedBox(height: 8),
+                Text(
+                  'Notifications and email reminders with bill breakdowns were queued for ${unpaid.length} participant(s).',
+                  style: Theme.of(ctx).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 16),
+                Text('Send or Copy Email Breakdown:', style: Theme.of(ctx).textTheme.labelLarge),
+                const SizedBox(height: 8),
+                for (final p in unpaid) ...[
+                  Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 14,
+                                child: Text(p.name.isEmpty ? '?' : p.name[0].toUpperCase()),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    Text(p.email, style: Theme.of(ctx).textTheme.bodySmall),
+                                  ],
+                                ),
+                              ),
+                              Text(
+                                Money.format(p.share, ticket.currency),
+                                style: Theme.of(ctx).textTheme.titleSmall,
+                              ),
+                            ],
                           ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(dCtx),
-                              child: const Text('Close'),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              OutlinedButton.icon(
+                                icon: const Icon(Icons.copy, size: 16),
+                                label: const Text('Copy Text'),
+                                onPressed: () {
+                                  final text = NotificationService.formatEmailBreakdown(ticket, p);
+                                  Clipboard.setData(ClipboardData(text: text));
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Copied email for ${p.name}')),
+                                  );
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              FilledButton.icon(
+                                icon: const Icon(Icons.mail_outline, size: 16),
+                                label: const Text('Open Email App'),
+                                onPressed: () => _launchEmailApp(p, ticket),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
+                ],
+                const SizedBox(height: 12),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Done'),
                 ),
               ],
-              const SizedBox(height: 8),
-              FilledButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Done'),
-              ),
-            ],
+            ),
           ),
         ),
       ),
