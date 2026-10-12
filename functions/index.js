@@ -5,19 +5,6 @@ const nodemailer = require('nodemailer');
 admin.initializeApp();
 
 /**
- * Configure Nodemailer transport.
- * Configure environment variables for email sending:
- * EMAIL_SERVICE (e.g. 'gmail', 'SendGrid', 'Resend'), EMAIL_USER, EMAIL_PASS
- */
-const mailTransporter = nodemailer.createTransport({
-  service: process.env.EMAIL_SERVICE || 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER || '',
-    pass: process.env.EMAIL_PASS || '',
-  },
-});
-
-/**
  * Triggered when the app queues a payment reminder in `notifications/{id}`.
  * Sends both a Push Notification (FCM) and an Email with the itemized bill breakdown.
  */
@@ -28,7 +15,7 @@ exports.sendPaymentNotification = onDocumentCreated('notifications/{id}', async 
   const formattedAmount = (n.amount / 100).toFixed(2);
   const items = n.items || [];
 
-  // Build Itemized HTML Table
+  // Build Itemized HTML Table & Text Summary
   let itemsHtml = '';
   let itemsText = '';
 
@@ -96,44 +83,60 @@ exports.sendPaymentNotification = onDocumentCreated('notifications/{id}', async 
     `Please pay ${n.ownerName || 'the owner'} (${n.ownerEmail || ''}).\n\n` +
     `Sent via SplitEase`;
 
-  // 1. Send Email if SMTP credentials configured, otherwise log formatted email
-  if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+  // Read email credentials inside function handler when process.env is populated
+  const emailUser = (process.env.EMAIL_USER || '').trim();
+  const emailPass = (process.env.EMAIL_PASS || '').replace(/\s+/g, '');
+  const emailService = (process.env.EMAIL_SERVICE || 'gmail').trim();
+
+  if (emailUser && emailPass) {
+    const mailTransporter = nodemailer.createTransport({
+      service: emailService,
+      auth: {
+        user: emailUser,
+        pass: emailPass,
+      },
+    });
+
     try {
-      await mailTransporter.sendMail({
-        from: `"SplitEase" <${process.env.EMAIL_USER}>`,
+      const info = await mailTransporter.sendMail({
+        from: `"SplitEase" <${emailUser}>`,
         to: n.toEmail,
         subject: subject,
         text: textContent,
         html: htmlContent,
       });
-      console.log(`Email sent successfully to ${n.toEmail}`);
+      console.log(`SUCCESS: Email sent to ${n.toEmail}. Message ID: ${info.messageId}`);
     } catch (mailErr) {
-      console.error(`Failed to send email to ${n.toEmail}:`, mailErr);
+      console.error(`ERROR: Failed to send email to ${n.toEmail}:`, mailErr);
     }
   } else {
-    console.log(`[Email Ready for ${n.toEmail}] Subject: "${subject}"\n${textContent}`);
+    console.log(`WARNING: EMAIL_USER or EMAIL_PASS not set. EMAIL_USER="${emailUser}"`);
   }
 
-  // 2. Send Push Notification if FCM token exists
-  const users = await admin
-    .firestore()
-    .collection('users')
-    .where('email', '==', n.toEmail)
-    .limit(1)
-    .get();
+  // Send Push Notification if FCM token exists for recipient
+  try {
+    const users = await admin
+      .firestore()
+      .collection('users')
+      .where('email', '==', n.toEmail)
+      .limit(1)
+      .get();
 
-  if (!users.empty) {
-    const tokens = users.docs[0].get('fcmTokens') || [];
-    if (tokens.length > 0) {
-      await admin.messaging().sendEachForMulticast({
-        tokens,
-        notification: {
-          title: `You owe ${n.currency} ${formattedAmount}`,
-          body: `For "${n.title}" · Tap to open SplitEase`,
-        },
-        data: { ticketId: n.ticketId },
-      });
-      console.log(`Push notification sent to ${n.toEmail}`);
+    if (!users.empty) {
+      const tokens = users.docs[0].get('fcmTokens') || [];
+      if (tokens.length > 0) {
+        await admin.messaging().sendEachForMulticast({
+          tokens,
+          notification: {
+            title: `You owe ${n.currency} ${formattedAmount}`,
+            body: `For "${n.title}" · Tap to open SplitEase`,
+          },
+          data: { ticketId: n.ticketId },
+        });
+        console.log(`SUCCESS: Push notification sent to ${n.toEmail}`);
+      }
     }
+  } catch (fcmErr) {
+    console.error(`ERROR: Failed to send push notification to ${n.toEmail}:`, fcmErr);
   }
 });
