@@ -59,12 +59,9 @@ class _LoginScreenState extends State<LoginScreen> {
       _error = null;
     });
     try {
-      // Opens the native Google account picker.
       final googleUser = await GoogleSignIn().signIn();
-      if (googleUser == null) {
-        // User cancelled the picker.
-        return;
-      }
+      if (googleUser == null) return;
+
       final googleAuth = await googleUser.authentication;
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
@@ -89,89 +86,175 @@ class _LoginScreenState extends State<LoginScreen> {
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 400),
+              constraints: const BoxConstraints(maxWidth: 420),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Icon(Icons.receipt_long, size: 64, color: theme.colorScheme.primary),
-                  const SizedBox(height: 8),
-                  Text('SplitEase',
-                      textAlign: TextAlign.center, style: theme.textTheme.headlineMedium),
-                  const SizedBox(height: 4),
-                  Text('Split any bill, in any currency.',
-                      textAlign: TextAlign.center, style: theme.textTheme.bodyMedium),
+                  // --- Brand Logo Header ---
+                  Center(
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(28),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF1B6EF3).withValues(alpha: 0.15),
+                            blurRadius: 24,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: Image.asset(
+                          'assets/icon/split_ease_icon.png',
+                          height: 100,
+                          width: 100,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            height: 100,
+                            width: 100,
+                            color: const Color(0xFF1B6EF3),
+                            child: const Icon(Icons.receipt_long, size: 50, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'SplitEase',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.headlineLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF0F172A),
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Scan bills, assign dishes, and split fairly in any currency.',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
                   const SizedBox(height: 32),
 
-                  // --- Google sign-in ---
-                  OutlinedButton.icon(
-                    onPressed: _busy ? null : _signInWithGoogle,
-                    icon: const Icon(Icons.g_mobiledata, size: 28), // swap for a Google logo asset
-                    label: const Text('Continue with Google'),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      const Expanded(child: Divider()),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Text('or', style: theme.textTheme.bodySmall),
-                      ),
-                      const Expanded(child: Divider()),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-
-                  // --- Email / password ---
-                  Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (_register) ...[
-                          TextFormField(
-                            controller: _name,
-                            decoration: const InputDecoration(labelText: 'Name'),
-                            validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                  // --- Card Container for Form ---
+                  Card(
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      side: const BorderSide(color: Color(0xFFE2E8F0)),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // Google Sign-In
+                          OutlinedButton.icon(
+                            onPressed: _busy ? null : _signInWithGoogle,
+                            icon: const Icon(Icons.g_mobiledata, size: 30, color: Color(0xFF4285F4)),
+                            label: const Text('Continue with Google'),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 20),
+
+                          Row(
+                            children: [
+                              const Expanded(child: Divider()),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                child: Text('or with email',
+                                    style: theme.textTheme.bodySmall?.copyWith(color: const Color(0xFF94A3B8))),
+                              ),
+                              const Expanded(child: Divider()),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+
+                          Form(
+                            key: _formKey,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                if (_register) ...[
+                                  TextFormField(
+                                    controller: _name,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Full Name',
+                                      prefixIcon: Icon(Icons.person_outline, size: 20),
+                                    ),
+                                    validator: (v) =>
+                                        (v == null || v.trim().isEmpty) ? 'Enter your name' : null,
+                                  ),
+                                  const SizedBox(height: 14),
+                                ],
+                                TextFormField(
+                                  controller: _email,
+                                  keyboardType: TextInputType.emailAddress,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Email Address',
+                                    prefixIcon: Icon(Icons.mail_outline, size: 20),
+                                  ),
+                                  validator: (v) =>
+                                      (v == null || !v.contains('@')) ? 'Enter a valid email' : null,
+                                ),
+                                const SizedBox(height: 14),
+                                TextFormField(
+                                  controller: _password,
+                                  obscureText: true,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Password',
+                                    prefixIcon: Icon(Icons.lock_outline, size: 20),
+                                  ),
+                                  validator: (v) =>
+                                      (v == null || v.length < 6) ? 'At least 6 characters' : null,
+                                ),
+                                if (_error != null) ...[
+                                  const SizedBox(height: 14),
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: theme.colorScheme.errorContainer.withValues(alpha: 0.4),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      _error!,
+                                      style: TextStyle(color: theme.colorScheme.error, fontSize: 13),
+                                    ),
+                                  ),
+                                ],
+                                const SizedBox(height: 24),
+                                FilledButton(
+                                  onPressed: _busy ? null : _submit,
+                                  child: _busy
+                                      ? const SizedBox(
+                                          height: 20,
+                                          width: 20,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2, color: Colors.white))
+                                      : Text(_register ? 'Create Account' : 'Log In'),
+                                ),
+                              ],
+                            ),
+                          ),
                         ],
-                        TextFormField(
-                          controller: _email,
-                          keyboardType: TextInputType.emailAddress,
-                          decoration: const InputDecoration(labelText: 'Email'),
-                          validator: (v) =>
-                              (v == null || !v.contains('@')) ? 'Enter a valid email' : null,
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _password,
-                          obscureText: true,
-                          decoration: const InputDecoration(labelText: 'Password'),
-                          validator: (v) =>
-                              (v == null || v.length < 6) ? 'At least 6 characters' : null,
-                        ),
-                        if (_error != null) ...[
-                          const SizedBox(height: 12),
-                          Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
-                        ],
-                        const SizedBox(height: 24),
-                        FilledButton(
-                          onPressed: _busy ? null : _submit,
-                          child: _busy
-                              ? const SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2))
-                              : Text(_register ? 'Create account' : 'Log in'),
-                        ),
-                        TextButton(
-                          onPressed: _busy ? null : () => setState(() => _register = !_register),
-                          child: Text(_register
-                              ? 'Already have an account? Log in'
-                              : 'New here? Create an account'),
-                        ),
-                      ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed: _busy ? null : () => setState(() => _register = !_register),
+                    child: Text(
+                      _register
+                          ? 'Already have an account? Log In'
+                          : "Don't have an account? Sign Up",
+                      style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1B6EF3)),
                     ),
                   ),
                 ],
