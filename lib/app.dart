@@ -52,7 +52,7 @@ class SplitEaseApp extends StatelessWidget {
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
-            side: BorderSide(color: Colors.slate[200] ?? const Color(0xFFE2E8F0)),
+            side: const BorderSide(color: Color(0xFFE2E8F0)),
           ),
           color: Colors.white,
         ),

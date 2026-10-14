@@ -9,7 +9,7 @@ import '../../core/money.dart';
 import '../../models/ticket.dart';
 import '../../providers.dart';
 import '../../services/notification_service.dart';
-import 'tickets_screen.dart' show statusLabel;
+import 'tickets_screen.dart' show buildStatusBadge;
 
 class TicketDetailScreen extends ConsumerWidget {
   const TicketDetailScreen({super.key, required this.ticketId});
@@ -205,7 +205,7 @@ class _TicketBody extends ConsumerWidget {
               children: [
                 Row(
                   children: [
-                    Chip(label: Text(statusLabel(ticket.status))),
+                    buildStatusBadge(context, ticket.status),
                     const Spacer(),
                     DropdownButton<String>(
                       value: preferred,
