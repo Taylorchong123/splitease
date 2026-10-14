@@ -46,6 +46,10 @@ lib/firebase_options.dart
 google-services.json
 GoogleService-Info.plist
 
-# Node / Cloud Functions
+# Node / Cloud Functions & Secrets
+.env
+.env*
+*.env
+functions/.env
 functions/node_modules/
 functions/npm-debug.log
