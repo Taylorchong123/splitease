@@ -103,8 +103,9 @@ class Ticket {
     required this.title,
     required this.currency,
     required this.items,
-    required this.tax,
-    required this.tip,
+    this.tax = 0,
+    this.serviceCharge = 0,
+    this.tip = 0,
     required this.participants,
     required this.status,
     required this.source,
@@ -117,8 +118,16 @@ class Ticket {
   final String title;
   final String currency;
   final List<TicketItem> items;
+
+  /// Tax amount (SST/GST/VAT) in minor units.
   final int tax;
+
+  /// Service charge amount in minor units.
+  final int serviceCharge;
+
+  /// Tip / Rounding in minor units.
   final int tip;
+
   final List<Participant> participants;
   final TicketStatus status;
 
@@ -126,16 +135,18 @@ class Ticket {
   final String source;
   final DateTime createdAt;
 
-  /// Exchange-rate snapshot (units per 1 USD) taken when the ticket was created,
-  /// so historical tickets never change.
+  /// Exchange-rate snapshot (units per 1 USD) taken when the ticket was created.
   final Map<String, double>? fxRates;
 
   int get subtotal => items.fold(0, (sum, i) => sum + i.total);
-  int get total => subtotal + tax + tip;
+  int get total => subtotal + tax + serviceCharge + tip;
 
   Ticket copyWith({
     List<Participant>? participants,
     TicketStatus? status,
+    int? tax,
+    int? serviceCharge,
+    int? tip,
   }) =>
       Ticket(
         id: id,
@@ -143,8 +154,9 @@ class Ticket {
         title: title,
         currency: currency,
         items: items,
-        tax: tax,
-        tip: tip,
+        tax: tax ?? this.tax,
+        serviceCharge: serviceCharge ?? this.serviceCharge,
+        tip: tip ?? this.tip,
         participants: participants ?? this.participants,
         status: status ?? this.status,
         source: source,
@@ -152,7 +164,7 @@ class Ticket {
         fxRates: fxRates,
       );
 
-  /// Calculates each participant's share based on item assignments + proportional tax/tip.
+  /// Calculates each participant's share based on item assignments + proportional tax & service charge.
   Ticket recalculated() {
     if (participants.isEmpty) return copyWith(status: TicketStatus.draft);
 
@@ -178,19 +190,27 @@ class Ticket {
     }
 
     final totalItemSubtotal = itemSubtotals.fold<int>(0, (a, b) => a + b);
-    final totalTaxTip = tax + tip;
-    List<int> totalShares;
 
-    if (totalTaxTip != 0 && totalItemSubtotal > 0) {
-      final taxTipShares = Money.allocate(totalTaxTip, itemSubtotals);
-      totalShares = [
-        for (var i = 0; i < participants.length; i++) itemSubtotals[i] + taxTipShares[i],
-      ];
-    } else if (totalItemSubtotal > 0) {
-      totalShares = itemSubtotals;
-    } else {
-      totalShares = Money.splitEqually(total, participants.length);
+    List<int> taxShares = List<int>.filled(participants.length, 0);
+    List<int> serviceShares = List<int>.filled(participants.length, 0);
+    List<int> tipShares = List<int>.filled(participants.length, 0);
+
+    if (totalItemSubtotal > 0) {
+      if (tax != 0) {
+        taxShares = Money.allocate(tax, itemSubtotals);
+      }
+      if (serviceCharge != 0) {
+        serviceShares = Money.allocate(serviceCharge, itemSubtotals);
+      }
+      if (tip != 0) {
+        tipShares = Money.allocate(tip, itemSubtotals);
+      }
     }
+
+    final totalShares = [
+      for (var i = 0; i < participants.length; i++)
+        itemSubtotals[i] + taxShares[i] + serviceShares[i] + tipShares[i],
+    ];
 
     final updated = [
       for (var i = 0; i < participants.length; i++)
@@ -215,6 +235,7 @@ class Ticket {
         'currency': currency,
         'items': items.map((i) => i.toMap()).toList(),
         'tax': tax,
+        'serviceCharge': serviceCharge,
         'tip': tip,
         'participants': participants.map((p) => p.toMap()).toList(),
         'memberEmails': participants.map((p) => p.email.toLowerCase()).toList(),
@@ -232,8 +253,9 @@ class Ticket {
         items: (m['items'] as List)
             .map((e) => TicketItem.fromMap(Map<String, dynamic>.from(e as Map)))
             .toList(),
-        tax: (m['tax'] as num).toInt(),
-        tip: (m['tip'] as num).toInt(),
+        tax: (m['tax'] as num? ?? 0).toInt(),
+        serviceCharge: (m['serviceCharge'] as num? ?? 0).toInt(),
+        tip: (m['tip'] as num? ?? 0).toInt(),
         participants: (m['participants'] as List)
             .map((e) => Participant.fromMap(Map<String, dynamic>.from(e as Map)))
             .toList(),

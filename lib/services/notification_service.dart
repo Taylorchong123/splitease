@@ -64,7 +64,14 @@ class NotificationService {
         lines.add('• ${i.name} (${i.quantity}x)$splitInfo: ${Money.format(pShare, ticket.currency)}');
       }
     } else {
-      lines.add('• Share of bill total');
+      lines.add('• Share of food subtotal');
+    }
+
+    if (ticket.tax > 0) {
+      lines.add('• Proportional SST/Tax share');
+    }
+    if (ticket.serviceCharge > 0) {
+      lines.add('• Proportional Service Charge share');
     }
 
     lines.add('\nTOTAL AMOUNT OWED: ${Money.format(participant.share, ticket.currency)}');

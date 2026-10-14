@@ -79,6 +79,7 @@ class TicketRepository {
         'currency': ticket.currency,
         'subtotal': ticket.subtotal,
         'tax': ticket.tax,
+        'serviceCharge': ticket.serviceCharge,
         'items': assignedItems,
         'createdAt': FieldValue.serverTimestamp(),
       });

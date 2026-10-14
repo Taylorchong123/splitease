@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -27,10 +25,14 @@ class CreateTicketScreen extends ConsumerStatefulWidget {
 
 class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
   final _title = TextEditingController();
-  final _tax = TextEditingController();
   late String _currency;
   late List<TicketItem> _items;
   late List<Participant> _participants;
+
+  int _scannedTax = 0;
+  int _scannedServiceCharge = 0;
+  double _taxRatePercent = 0.0;
+  double _serviceRatePercent = 0.0;
   bool _saving = false;
 
   @override
@@ -47,7 +49,7 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
         name: ownerName,
         email: ownerEmail,
         share: 0,
-        paid: true, // the owner already paid the venue
+        paid: true, // owner already paid the venue
         isOwner: true,
       ),
     ];
@@ -57,26 +59,36 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
     _currency = p?.currency ?? 'SGD';
     _items = [...?p?.items];
 
-    if (p != null && p.discount > 0) {
-      _items.add(TicketItem(name: 'Discount', amount: -p.discount, quantity: 1));
-    }
-    if (p != null && p.rounding != 0) {
-      _items.add(TicketItem(name: 'Rounding adjustment', amount: p.rounding, quantity: 1));
-    }
-    if (p != null && p.tax > 0) {
-      final d = Money.decimals(_currency);
-      _tax.text = (p.tax / math.pow(10, d)).toStringAsFixed(d);
+    if (p != null) {
+      _scannedTax = p.tax;
+      _scannedServiceCharge = p.serviceCharge;
+
+      if (p.discount > 0) {
+        _items.add(TicketItem(name: 'Discount', amount: -p.discount, quantity: 1));
+      }
+      if (p.rounding != 0) {
+        _items.add(TicketItem(name: 'Rounding adjustment', amount: p.rounding, quantity: 1));
+      }
     }
   }
 
   @override
   void dispose() {
     _title.dispose();
-    _tax.dispose();
     super.dispose();
   }
 
-  int get _taxMinor => Money.parse(_tax.text.isEmpty ? '0' : _tax.text, _currency) ?? 0;
+  int get _subtotal => _items.fold(0, (s, i) => s + i.total);
+
+  int get _calculatedTax {
+    if (_scannedTax > 0 && _taxRatePercent == 0.0) return _scannedTax;
+    return (_subtotal * _taxRatePercent / 100).round();
+  }
+
+  int get _calculatedServiceCharge {
+    if (_scannedServiceCharge > 0 && _serviceRatePercent == 0.0) return _scannedServiceCharge;
+    return (_subtotal * _serviceRatePercent / 100).round();
+  }
 
   Ticket get _computedTicket {
     final user = FirebaseAuth.instance.currentUser;
@@ -88,7 +100,8 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
       title: _title.text.trim(),
       currency: _currency,
       items: _items,
-      tax: _taxMinor,
+      tax: _calculatedTax,
+      serviceCharge: _calculatedServiceCharge,
       tip: 0,
       participants: _participants,
       status: TicketStatus.draft,
@@ -125,7 +138,6 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
 
     setState(() {
       _participants.removeAt(index);
-      // Remove this participant from any assigned item
       _items = [
         for (final item in _items)
           item.copyWith(
@@ -190,7 +202,8 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
         title: _title.text.trim().isEmpty ? 'Bill' : _title.text.trim(),
         currency: _currency,
         items: _items,
-        tax: _taxMinor,
+        tax: _calculatedTax,
+        serviceCharge: _calculatedServiceCharge,
         tip: 0,
         participants: _participants,
         status: TicketStatus.draft,
@@ -311,7 +324,7 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
                       children: [
                         Text(
                           Money.format(ticket.participants[i].share, _currency),
-                          style: theme.textTheme.titleSmall,
+                          style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
                         ),
                         if (!ticket.participants[i].isOwner)
                           IconButton(
@@ -422,15 +435,63 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
             ),
           ],
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
 
-          // --- SECTION 3: TAX & SUMMARY ---
-          TextField(
-            controller: _tax,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'Tax / service charge (amount)'),
-            onChanged: (_) => setState(() {}),
+          // --- SECTION 3: SEPARATE TAX & SERVICE CHARGE (READ-ONLY DISPLAY) ---
+          Text('3. Tax & Service Charge Settings', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 8),
+
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('SST / Tax Rate', style: theme.textTheme.labelMedium),
+                    const SizedBox(height: 4),
+                    SegmentedButton<double>(
+                      segments: const [
+                        ButtonSegment(value: 0.0, label: Text('0%')),
+                        ButtonSegment(value: 6.0, label: Text('6%')),
+                        ButtonSegment(value: 8.0, label: Text('8%')),
+                        ButtonSegment(value: 10.0, label: Text('10%')),
+                      ],
+                      selected: {_taxRatePercent},
+                      onSelectionChanged: (set) {
+                        setState(() => _taxRatePercent = set.first);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
+          const SizedBox(height: 12),
+
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Service Charge Rate', style: theme.textTheme.labelMedium),
+                    const SizedBox(height: 4),
+                    SegmentedButton<double>(
+                      segments: const [
+                        ButtonSegment(value: 0.0, label: Text('0%')),
+                        ButtonSegment(value: 10.0, label: Text('10%')),
+                      ],
+                      selected: {_serviceRatePercent},
+                      onSelectionChanged: (set) {
+                        setState(() => _serviceRatePercent = set.first);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
           const SizedBox(height: 16),
 
           Card(
@@ -441,20 +502,28 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
                 children: [
                   Row(
                     children: [
-                      const Text('Subtotal'),
+                      const Text('Food Subtotal'),
                       const Spacer(),
                       Text(Money.format(ticket.subtotal, _currency)),
                     ],
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   Row(
                     children: [
-                      const Text('Tax / Service Charge'),
+                      Text('SST / Tax (${_taxRatePercent.toInt()}%) [Read-only]'),
                       const Spacer(),
                       Text(Money.format(ticket.tax, _currency)),
                     ],
                   ),
-                  const Divider(height: 16),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Text('Service Charge (${_serviceRatePercent.toInt()}%) [Read-only]'),
+                      const Spacer(),
+                      Text(Money.format(ticket.serviceCharge, _currency)),
+                    ],
+                  ),
+                  const Divider(height: 20),
                   Row(
                     children: [
                       Text('Grand Total', style: theme.textTheme.titleMedium),

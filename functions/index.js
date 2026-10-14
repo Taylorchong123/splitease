@@ -37,6 +37,26 @@ exports.sendPaymentNotification = onDocumentCreated('notifications/{id}', async 
     itemsText += `• ${item.name} (${item.quantity}x)${splitInfo}: ${n.currency} ${itemShare}\n`;
   }
 
+  if (n.tax > 0) {
+    itemsHtml += `
+      <tr style="border-bottom: 1px solid #eee; color: #666;">
+        <td style="padding: 8px 0; font-size: 13px;">SST / Tax Share (Proportional)</td>
+        <td style="padding: 8px 0; text-align: right; font-size: 13px;">Included in total</td>
+      </tr>
+    `;
+    itemsText += `• SST/Tax: Allocated proportionally\n`;
+  }
+
+  if (n.serviceCharge > 0) {
+    itemsHtml += `
+      <tr style="border-bottom: 1px solid #eee; color: #666;">
+        <td style="padding: 8px 0; font-size: 13px;">Service Charge Share (Proportional)</td>
+        <td style="padding: 8px 0; text-align: right; font-size: 13px;">Included in total</td>
+      </tr>
+    `;
+    itemsText += `• Service Charge: Allocated proportionally\n`;
+  }
+
   const subject = `Payment Reminder: You owe ${n.currency} ${formattedAmount} for "${n.title || 'Bill'}"`;
 
   const htmlContent = `

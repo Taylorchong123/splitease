@@ -50,9 +50,10 @@ Rounded Total (RM): 173.90
       expect(bill.items[0].amount, 3290);
     });
 
-    test('folds SST + service charge into tax, and total discount separately', () {
+    test('separates SST tax and service charge into separate fields', () {
       final bill = BillParser.parse(receipt);
-      expect(bill.tax, 899 + 1499);
+      expect(bill.tax, 899);
+      expect(bill.serviceCharge, 1499);
       expect(bill.discount, 130);
     });
 
@@ -128,7 +129,8 @@ Rounded Total (RM) : 69.60
       expect(bill.items[4].name, 'Cheesy Fries');
 
       expect(bill.discount, 320);
-      expect(bill.tax, 360 + 600);
+      expect(bill.tax, 360);
+      expect(bill.serviceCharge, 600);
       expect(bill.total, 6960);
     });
   });

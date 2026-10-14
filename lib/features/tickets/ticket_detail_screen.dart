@@ -245,8 +245,15 @@ class _TicketBody extends ConsumerWidget {
           ListTile(
             contentPadding: EdgeInsets.zero,
             dense: true,
-            title: const Text('Tax / service'),
+            title: const Text('SST / Tax'),
             trailing: Text(Money.format(ticket.tax, ticket.currency)),
+          ),
+        if (ticket.serviceCharge > 0)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: const Text('Service Charge'),
+            trailing: Text(Money.format(ticket.serviceCharge, ticket.currency)),
           ),
         const Divider(height: 32),
         Row(
