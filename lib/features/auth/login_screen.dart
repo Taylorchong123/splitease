@@ -59,7 +59,10 @@ class _LoginScreenState extends State<LoginScreen> {
       _error = null;
     });
     try {
-      final googleUser = await GoogleSignIn().signIn();
+      // Web Client ID required by Google Play Services to obtain idToken for Firebase
+      const webClientId = '646271044631-giqku0fecu7ckbd24ro6106brj8evj94.apps.googleusercontent.com';
+      final googleSignIn = GoogleSignIn(serverClientId: webClientId);
+      final googleUser = await googleSignIn.signIn();
       if (googleUser == null) return;
 
       final googleAuth = await googleUser.authentication;
