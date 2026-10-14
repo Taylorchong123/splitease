@@ -59,13 +59,24 @@ class _LoginScreenState extends State<LoginScreen> {
       _error = null;
     });
     try {
-      // Web Client ID required by Google Play Services to obtain idToken for Firebase
       const webClientId = '646271044631-giqku0fecu7ckbd24ro6106brj8evj94.apps.googleusercontent.com';
       final googleSignIn = GoogleSignIn(serverClientId: webClientId);
+
+      // Force-clear any previous failed/stale session to force account picker
+      try {
+        await googleSignIn.signOut();
+      } catch (_) {}
+
       final googleUser = await googleSignIn.signIn();
       if (googleUser == null) return;
 
       final googleAuth = await googleUser.authentication;
+      if (googleAuth.idToken == null) {
+        throw Exception(
+          'Google ID token is missing. Please ensure your debug SHA-1 (0A:DF:15:89:98:A1:C1:9F:8D:FC:7B:28:99:F1:6B:55:AF:C1:2A:61) is added in Firebase Console.',
+        );
+      }
+
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
