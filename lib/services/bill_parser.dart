@@ -75,7 +75,10 @@ class BillParser {
     'card no', 'invoice', 'tax invoice', 'thank you', 'powered by', 'scan this',
   ];
   static const _taxWords = ['tax', 'gst', 'vat', 'sst'];
-  static const _serviceWords = ['service charge', 'serv charge', 'svc charge'];
+  static final _serviceRegex = RegExp(
+    r'service\s*[\(\.\-\_]?\s*charge|serv\s*charge|svc\s*charge|service\s*chg|service\s*fee|\bservice\b',
+    caseSensitive: false,
+  );
   static const _discountWords = ['discount', 'less'];
   static const _roundingWords = ['rounding', 'round adj', 'rnd adj'];
   static const _totalWords = ['total', 'amount due', 'rounded total'];
@@ -150,7 +153,7 @@ class BillParser {
         printedTotal = amount;
         continue;
       }
-      if (_serviceWords.any(lower.contains)) {
+      if (_serviceRegex.hasMatch(lower)) {
         serviceCharge += amount;
         continue;
       }
