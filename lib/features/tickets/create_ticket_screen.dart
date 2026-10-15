@@ -312,54 +312,27 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
             decoration: const InputDecoration(labelText: 'Title (e.g. Team dinner)'),
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  isExpanded: true,
-                  initialValue: _currency,
-                  decoration: const InputDecoration(labelText: 'Currency'),
-                  items: [
-                    for (final c in supportedCurrencies)
-                      DropdownMenuItem(value: c, child: Text(c, overflow: TextOverflow.ellipsis)),
-                  ],
-                  onChanged: (v) => setState(() => _currency = v ?? _currency),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  isExpanded: true,
-                  initialValue: _country,
-                  decoration: const InputDecoration(labelText: 'Region Rules'),
-                  items: const [
-                    DropdownMenuItem(
-                      value: 'MY',
-                      child: Text('🇲🇾 Malaysia', overflow: TextOverflow.ellipsis),
-                    ),
-                    DropdownMenuItem(
-                      value: 'SG',
-                      child: Text('🇸🇬 Singapore', overflow: TextOverflow.ellipsis),
-                    ),
-                  ],
-                  onChanged: (v) {
-                    if (v == null) return;
-                    setState(() {
-                      _country = v;
-                      if (v == 'SG') {
-                        _currency = 'SGD';
-                        _taxType = 'GST';
-                        _taxRatePercent = 0.0;
-                      } else {
-                        _currency = 'MYR';
-                        _taxType = 'SST';
-                        _taxRatePercent = 0.0;
-                      }
-                    });
-                  },
-                ),
-              ),
+          DropdownButtonFormField<String>(
+            isExpanded: true,
+            initialValue: _currency,
+            decoration: const InputDecoration(labelText: 'Currency'),
+            items: [
+              for (final c in supportedCurrencies)
+                DropdownMenuItem(value: c, child: Text(c, overflow: TextOverflow.ellipsis)),
             ],
+            onChanged: (v) {
+              if (v == null) return;
+              setState(() {
+                _currency = v;
+                if (v == 'SGD') {
+                  _country = 'SG';
+                  _taxType = 'GST';
+                } else {
+                  _country = 'MY';
+                  _taxType = 'SST';
+                }
+              });
+            },
           ),
           const SizedBox(height: 24),
 
