@@ -230,55 +230,51 @@ class Ticket {
   Ticket recalculated() {
     if (participants.isEmpty) return copyWith(status: TicketStatus.draft);
 
-    final itemSubtotals = List<int>.filled(participants.length, 0);
+    final hasCustomAssignments = items.any(
+      (i) => !i.isVoidOrComplimentary && i.assignedEmails.isNotEmpty,
+    );
 
-    for (final item in items) {
-      if (item.isVoidOrComplimentary) continue;
+    List<int> totalShares;
 
-      final assigned = item.assignedEmails.isEmpty
-          ? participants
-          : participants
-              .where((p) => item.assignedEmails.contains(p.email.toLowerCase()))
-              .toList();
+    if (!hasCustomAssignments || splitPolicy == 'equal') {
+      totalShares = Money.splitEqually(total, participants.length);
+    } else {
+      final itemSubtotals = List<int>.filled(participants.length, 0);
 
-      final effectiveAssigned = assigned.isEmpty ? participants : assigned;
-      final shares = Money.splitEqually(item.total, effectiveAssigned.length);
+      for (final item in items) {
+        if (item.isVoidOrComplimentary) continue;
 
-      for (var i = 0; i < effectiveAssigned.length; i++) {
-        final pEmail = effectiveAssigned[i].email.toLowerCase();
-        final pIndex = participants.indexWhere((p) => p.email.toLowerCase() == pEmail);
-        if (pIndex != -1) {
-          itemSubtotals[pIndex] += shares[i];
+        final assigned = item.assignedEmails.isEmpty
+            ? participants
+            : participants
+                .where((p) => item.assignedEmails.contains(p.email.toLowerCase()))
+                .toList();
+
+        final effectiveAssigned = assigned.isEmpty ? participants : assigned;
+        final shares = Money.splitEqually(item.total, effectiveAssigned.length);
+
+        for (var i = 0; i < effectiveAssigned.length; i++) {
+          final pEmail = effectiveAssigned[i].email.toLowerCase();
+          final pIndex = participants.indexWhere((p) => p.email.toLowerCase() == pEmail);
+          if (pIndex != -1) {
+            itemSubtotals[pIndex] += shares[i];
+          }
         }
       }
-    }
 
-    final totalItemSubtotal = itemSubtotals.fold<int>(0, (a, b) => a + b);
+      final totalItemSubtotal = itemSubtotals.fold<int>(0, (a, b) => a + b);
+      final totalExtra = tax + serviceCharge + tip;
 
-    List<int> taxShares = List<int>.filled(participants.length, 0);
-    List<int> serviceShares = List<int>.filled(participants.length, 0);
-    List<int> tipShares = List<int>.filled(participants.length, 0);
-
-    if (totalItemSubtotal > 0) {
-      if (splitPolicy == 'equal') {
-        if (tax != 0) taxShares = Money.splitEqually(tax, participants.length);
-        if (serviceCharge != 0) {
-          serviceShares = Money.splitEqually(serviceCharge, participants.length);
-        }
-        if (tip != 0) tipShares = Money.splitEqually(tip, participants.length);
+      if (totalExtra != 0 && totalItemSubtotal > 0) {
+        final extraShares = Money.allocate(totalExtra, itemSubtotals);
+        totalShares = [
+          for (var i = 0; i < participants.length; i++)
+            itemSubtotals[i] + extraShares[i],
+        ];
       } else {
-        if (tax != 0) taxShares = Money.allocate(tax, itemSubtotals);
-        if (serviceCharge != 0) {
-          serviceShares = Money.allocate(serviceCharge, itemSubtotals);
-        }
-        if (tip != 0) tipShares = Money.allocate(tip, itemSubtotals);
+        totalShares = itemSubtotals;
       }
     }
-
-    final totalShares = [
-      for (var i = 0; i < participants.length; i++)
-        itemSubtotals[i] + taxShares[i] + serviceShares[i] + tipShares[i],
-    ];
 
     final updated = [
       for (var i = 0; i < participants.length; i++)
