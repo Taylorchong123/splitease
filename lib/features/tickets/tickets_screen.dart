@@ -133,7 +133,10 @@ class _TicketsScreenState extends ConsumerState<TicketsScreen> {
           IconButton(
             tooltip: 'Log out',
             icon: const Icon(Icons.logout_outlined),
-            onPressed: () => FirebaseAuth.instance.signOut(),
+            onPressed: () async {
+              await FirebaseAuth.instance.signOut();
+              ref.invalidate(ticketsProvider);
+            },
           ),
         ],
       ),

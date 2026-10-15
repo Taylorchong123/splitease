@@ -27,6 +27,8 @@ final ticketsProvider = StreamProvider<List<Ticket>>((ref) {
       .watchFor(uid: user.uid, email: user.email ?? '');
 });
 
-final ticketProvider = StreamProvider.family<Ticket?, String>(
-  (ref, id) => ref.watch(ticketRepositoryProvider).watchOne(id),
-);
+final ticketProvider = StreamProvider.family<Ticket?, String>((ref, id) {
+  final user = ref.watch(authUserProvider).valueOrNull;
+  if (user == null) return Stream.value(null);
+  return ref.watch(ticketRepositoryProvider).watchOne(id);
+});
