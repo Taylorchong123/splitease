@@ -26,13 +26,17 @@ class CreateTicketScreen extends ConsumerStatefulWidget {
 class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
   final _title = TextEditingController();
   late String _currency;
+  late String _country;
+  late String _taxType;
   late List<TicketItem> _items;
   late List<Participant> _participants;
 
   int _scannedTax = 0;
   int _scannedServiceCharge = 0;
+  int? _printedTotal;
   double _taxRatePercent = 0.0;
   double _serviceRatePercent = 0.0;
+  String _splitPolicy = 'proportional';
   bool _saving = false;
 
   @override
@@ -56,18 +60,23 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
 
     final p = widget.initial;
     _title.text = p?.merchant ?? '';
-    _currency = p?.currency ?? 'SGD';
+    _currency = p?.currency ?? 'MYR';
+    _country = p?.country ?? 'MY';
+    _taxType = p?.taxType ?? 'SST';
+    _printedTotal = p?.total;
     _items = [...?p?.items];
 
     if (p != null) {
       _scannedTax = p.tax;
       _scannedServiceCharge = p.serviceCharge;
+      _taxRatePercent = p.taxRate;
+      _serviceRatePercent = p.serviceChargeRate;
 
       if (p.discount > 0) {
-        _items.add(TicketItem(name: 'Discount', amount: -p.discount, quantity: 1));
+        _items.add(const TicketItem(name: 'Discount', amount: 0, quantity: 1, itemType: ItemType.discount));
       }
       if (p.rounding != 0) {
-        _items.add(TicketItem(name: 'Rounding adjustment', amount: p.rounding, quantity: 1));
+        _items.add(TicketItem(name: 'Rounding adjustment', amount: p.rounding, quantity: 1, itemType: ItemType.fee));
       }
     }
   }
@@ -99,10 +108,14 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
       ownerId: ownerId,
       title: _title.text.trim(),
       currency: _currency,
+      country: _country,
+      taxType: _taxType,
       items: _items,
       tax: _calculatedTax,
       serviceCharge: _calculatedServiceCharge,
       tip: 0,
+      printedTotal: _printedTotal,
+      splitPolicy: _splitPolicy,
       participants: _participants,
       status: TicketStatus.draft,
       source: widget.source,
@@ -201,10 +214,14 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
         ownerId: user.uid,
         title: _title.text.trim().isEmpty ? 'Bill' : _title.text.trim(),
         currency: _currency,
+        country: _country,
+        taxType: _taxType,
         items: _items,
         tax: _calculatedTax,
         serviceCharge: _calculatedServiceCharge,
         tip: 0,
+        printedTotal: _printedTotal,
+        splitPolicy: _splitPolicy,
         participants: _participants,
         status: TicketStatus.draft,
         source: widget.source,
@@ -251,12 +268,23 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          if (widget.source == 'scan')
+          if (ticket.reconciliationDiscrepancy != 0)
             Card(
-              color: theme.colorScheme.secondaryContainer,
-              child: const Padding(
-                padding: EdgeInsets.all(12),
-                child: Text('OCR isn’t perfect. Check items, assign friends, and verify tax below.'),
+              color: Colors.amber[100],
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, color: Colors.amber),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Reconciliation Warning: Printed total (${Money.format(ticket.printedTotal!, _currency)}) differs from computed total (${Money.format(ticket.computedTotal, _currency)}) by ${Money.format(ticket.reconciliationDiscrepancy.abs(), _currency)}.',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           const SizedBox(height: 8),
@@ -267,13 +295,45 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
             decoration: const InputDecoration(labelText: 'Title (e.g. Team dinner)'),
           ),
           const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            initialValue: _currency,
-            decoration: const InputDecoration(labelText: 'Currency'),
-            items: [
-              for (final c in supportedCurrencies) DropdownMenuItem(value: c, child: Text(c)),
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  initialValue: _currency,
+                  decoration: const InputDecoration(labelText: 'Currency'),
+                  items: [
+                    for (final c in supportedCurrencies) DropdownMenuItem(value: c, child: Text(c)),
+                  ],
+                  onChanged: (v) => setState(() => _currency = v ?? _currency),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  initialValue: _country,
+                  decoration: const InputDecoration(labelText: 'Region Rules'),
+                  items: const [
+                    DropdownMenuItem(value: 'MY', child: Text('🇲🇾 Malaysia (SST)')),
+                    DropdownMenuItem(value: 'SG', child: Text('🇸🇬 Singapore (GST)')),
+                  ],
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setState(() {
+                      _country = v;
+                      if (v == 'SG') {
+                        _currency = 'SGD';
+                        _taxType = 'GST';
+                        _taxRatePercent = 9.0;
+                      } else {
+                        _currency = 'MYR';
+                        _taxType = 'SST';
+                        _taxRatePercent = 6.0;
+                      }
+                    });
+                  },
+                ),
+              ),
             ],
-            onChanged: (v) => setState(() => _currency = v ?? _currency),
           ),
           const SizedBox(height: 24),
 
@@ -374,8 +434,12 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
                             children: [
                               Text(
                                 _items[i].name,
-                                style: theme.textTheme.titleMedium
-                                    ?.copyWith(fontWeight: FontWeight.bold),
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  decoration: _items[i].isVoidOrComplimentary
+                                      ? TextDecoration.lineThrough
+                                      : null,
+                                ),
                               ),
                               Text(
                                 '${_items[i].quantity} × ${Money.format(_items[i].amount, _currency)}',
@@ -437,7 +501,7 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
 
           const SizedBox(height: 24),
 
-          // --- SECTION 3: SEPARATE TAX & SERVICE CHARGE (READ-ONLY DISPLAY) ---
+          // --- SECTION 3: TAX & SERVICE CHARGE (READ-ONLY DISPLAY) ---
           Text('3. Tax & Service Charge Settings', style: theme.textTheme.titleMedium),
           const SizedBox(height: 8),
 
@@ -447,14 +511,39 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('SST / Tax Rate', style: theme.textTheme.labelMedium),
+                    Text('Charge Allocation Policy', style: theme.textTheme.labelMedium),
+                    const SizedBox(height: 4),
+                    SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment(value: 'proportional', label: Text('Proportional to Food')),
+                        ButtonSegment(value: 'equal', label: Text('Split Equally')),
+                      ],
+                      selected: {_splitPolicy},
+                      onSelectionChanged: (set) {
+                        setState(() => _splitPolicy = set.first);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('SST / GST Tax Rate', style: theme.textTheme.labelMedium),
                     const SizedBox(height: 4),
                     SegmentedButton<double>(
                       segments: const [
                         ButtonSegment(value: 0.0, label: Text('0%')),
-                        ButtonSegment(value: 6.0, label: Text('6%')),
-                        ButtonSegment(value: 8.0, label: Text('8%')),
-                        ButtonSegment(value: 10.0, label: Text('10%')),
+                        ButtonSegment(value: 6.0, label: Text('6% SST')),
+                        ButtonSegment(value: 8.0, label: Text('8% SST')),
+                        ButtonSegment(value: 9.0, label: Text('9% GST')),
                       ],
                       selected: {_taxRatePercent},
                       onSelectionChanged: (set) {
@@ -479,7 +568,7 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
                     SegmentedButton<double>(
                       segments: const [
                         ButtonSegment(value: 0.0, label: Text('0%')),
-                        ButtonSegment(value: 10.0, label: Text('10%')),
+                        ButtonSegment(value: 10.0, label: Text('10% Service Charge')),
                       ],
                       selected: {_serviceRatePercent},
                       onSelectionChanged: (set) {
@@ -510,7 +599,7 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      Text('SST / Tax (${_taxRatePercent.toInt()}%) [Read-only]'),
+                      Text('$_taxType Tax (${_taxRatePercent.toStringAsFixed(0)}%) [Read-only]'),
                       const Spacer(),
                       Text(Money.format(ticket.tax, _currency)),
                     ],
@@ -518,7 +607,7 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      Text('Service Charge (${_serviceRatePercent.toInt()}%) [Read-only]'),
+                      Text('Service Charge (${_serviceRatePercent.toStringAsFixed(0)}%) [Read-only]'),
                       const Spacer(),
                       Text(Money.format(ticket.serviceCharge, _currency)),
                     ],

@@ -4,14 +4,22 @@ import '../core/money.dart';
 
 enum TicketStatus { draft, open, partiallyPaid, settled }
 
+enum ItemType { food, beverage, modifier, discount, fee, other }
+
 class TicketItem {
   const TicketItem({
+    this.id,
     required this.name,
     required this.amount,
     this.quantity = 1,
     this.assignedEmails = const [],
+    this.parentId,
+    this.itemType = ItemType.food,
+    this.isVoidOrComplimentary = false,
+    this.confidenceScore = 1.0,
   });
 
+  final String? id;
   final String name;
 
   /// Unit price in minor units.
@@ -22,29 +30,52 @@ class TicketItem {
   /// If empty, the item is shared by all participants.
   final List<String> assignedEmails;
 
-  int get total => amount * quantity;
+  /// ID of parent item if this is a modifier/add-on.
+  final String? parentId;
+
+  final ItemType itemType;
+  final bool isVoidOrComplimentary;
+  final double confidenceScore;
+
+  int get total => isVoidOrComplimentary ? 0 : amount * quantity;
 
   TicketItem copyWith({
+    String? id,
     String? name,
     int? amount,
     int? quantity,
     List<String>? assignedEmails,
+    String? parentId,
+    ItemType? itemType,
+    bool? isVoidOrComplimentary,
+    double? confidenceScore,
   }) =>
       TicketItem(
+        id: id ?? this.id,
         name: name ?? this.name,
         amount: amount ?? this.amount,
         quantity: quantity ?? this.quantity,
         assignedEmails: assignedEmails ?? this.assignedEmails,
+        parentId: parentId ?? this.parentId,
+        itemType: itemType ?? this.itemType,
+        isVoidOrComplimentary: isVoidOrComplimentary ?? this.isVoidOrComplimentary,
+        confidenceScore: confidenceScore ?? this.confidenceScore,
       );
 
   Map<String, dynamic> toMap() => {
+        'id': id,
         'name': name,
         'amount': amount,
         'quantity': quantity,
         'assignedEmails': assignedEmails,
+        'parentId': parentId,
+        'itemType': itemType.name,
+        'isVoidOrComplimentary': isVoidOrComplimentary,
+        'confidenceScore': confidenceScore,
       };
 
   factory TicketItem.fromMap(Map<String, dynamic> m) => TicketItem(
+        id: m['id'] as String?,
         name: m['name'] as String,
         amount: (m['amount'] as num).toInt(),
         quantity: (m['quantity'] as num? ?? 1).toInt(),
@@ -52,6 +83,12 @@ class TicketItem {
                 ?.map((e) => e.toString().toLowerCase())
                 .toList() ??
             const [],
+        parentId: m['parentId'] as String?,
+        itemType: m['itemType'] != null
+            ? ItemType.values.byName(m['itemType'] as String)
+            : ItemType.food,
+        isVoidOrComplimentary: m['isVoidOrComplimentary'] as bool? ?? false,
+        confidenceScore: (m['confidenceScore'] as num? ?? 1.0).toDouble(),
       );
 }
 
@@ -106,6 +143,12 @@ class Ticket {
     this.tax = 0,
     this.serviceCharge = 0,
     this.tip = 0,
+    this.country = 'MY',
+    this.taxType = 'SST',
+    this.printedTotal,
+    this.reconciliationDiscrepancy = 0,
+    this.requiresReview = false,
+    this.splitPolicy = 'proportional',
     required this.participants,
     required this.status,
     required this.source,
@@ -128,6 +171,13 @@ class Ticket {
   /// Tip / Rounding in minor units.
   final int tip;
 
+  final String country; // "MY" or "SG"
+  final String taxType; // "SST" or "GST"
+  final int? printedTotal;
+  final int reconciliationDiscrepancy;
+  final bool requiresReview;
+  final String splitPolicy; // "proportional" or "equal"
+
   final List<Participant> participants;
   final TicketStatus status;
 
@@ -139,7 +189,8 @@ class Ticket {
   final Map<String, double>? fxRates;
 
   int get subtotal => items.fold(0, (sum, i) => sum + i.total);
-  int get total => subtotal + tax + serviceCharge + tip;
+  int get computedTotal => subtotal + tax + serviceCharge + tip;
+  int get total => printedTotal ?? computedTotal;
 
   Ticket copyWith({
     List<Participant>? participants,
@@ -147,6 +198,10 @@ class Ticket {
     int? tax,
     int? serviceCharge,
     int? tip,
+    int? printedTotal,
+    int? reconciliationDiscrepancy,
+    bool? requiresReview,
+    String? splitPolicy,
   }) =>
       Ticket(
         id: id,
@@ -157,6 +212,13 @@ class Ticket {
         tax: tax ?? this.tax,
         serviceCharge: serviceCharge ?? this.serviceCharge,
         tip: tip ?? this.tip,
+        country: country,
+        taxType: taxType,
+        printedTotal: printedTotal ?? this.printedTotal,
+        reconciliationDiscrepancy:
+            reconciliationDiscrepancy ?? this.reconciliationDiscrepancy,
+        requiresReview: requiresReview ?? this.requiresReview,
+        splitPolicy: splitPolicy ?? this.splitPolicy,
         participants: participants ?? this.participants,
         status: status ?? this.status,
         source: source,
@@ -164,13 +226,15 @@ class Ticket {
         fxRates: fxRates,
       );
 
-  /// Calculates each participant's share based on item assignments + proportional tax & service charge.
+  /// Calculates each participant's share deterministically.
   Ticket recalculated() {
     if (participants.isEmpty) return copyWith(status: TicketStatus.draft);
 
     final itemSubtotals = List<int>.filled(participants.length, 0);
 
     for (final item in items) {
+      if (item.isVoidOrComplimentary) continue;
+
       final assigned = item.assignedEmails.isEmpty
           ? participants
           : participants
@@ -196,14 +260,18 @@ class Ticket {
     List<int> tipShares = List<int>.filled(participants.length, 0);
 
     if (totalItemSubtotal > 0) {
-      if (tax != 0) {
-        taxShares = Money.allocate(tax, itemSubtotals);
-      }
-      if (serviceCharge != 0) {
-        serviceShares = Money.allocate(serviceCharge, itemSubtotals);
-      }
-      if (tip != 0) {
-        tipShares = Money.allocate(tip, itemSubtotals);
+      if (splitPolicy == 'equal') {
+        if (tax != 0) taxShares = Money.splitEqually(tax, participants.length);
+        if (serviceCharge != 0) {
+          serviceShares = Money.splitEqually(serviceCharge, participants.length);
+        }
+        if (tip != 0) tipShares = Money.splitEqually(tip, participants.length);
+      } else {
+        if (tax != 0) taxShares = Money.allocate(tax, itemSubtotals);
+        if (serviceCharge != 0) {
+          serviceShares = Money.allocate(serviceCharge, itemSubtotals);
+        }
+        if (tip != 0) tipShares = Money.allocate(tip, itemSubtotals);
       }
     }
 
@@ -217,6 +285,9 @@ class Ticket {
         participants[i].copyWith(share: totalShares[i]),
     ];
 
+    final discrepancy = (printedTotal != null) ? (printedTotal! - computedTotal) : 0;
+    final needsReview = requiresReview || discrepancy != 0;
+
     final others = updated.where((p) => !p.isOwner).toList();
     final newStatus = others.isEmpty
         ? TicketStatus.draft
@@ -226,7 +297,12 @@ class Ticket {
                 ? TicketStatus.partiallyPaid
                 : TicketStatus.open;
 
-    return copyWith(participants: updated, status: newStatus);
+    return copyWith(
+      participants: updated,
+      status: newStatus,
+      reconciliationDiscrepancy: discrepancy,
+      requiresReview: needsReview,
+    );
   }
 
   Map<String, dynamic> toMap() => {
@@ -237,6 +313,12 @@ class Ticket {
         'tax': tax,
         'serviceCharge': serviceCharge,
         'tip': tip,
+        'country': country,
+        'taxType': taxType,
+        'printedTotal': printedTotal,
+        'reconciliationDiscrepancy': reconciliationDiscrepancy,
+        'requiresReview': requiresReview,
+        'splitPolicy': splitPolicy,
         'participants': participants.map((p) => p.toMap()).toList(),
         'memberEmails': participants.map((p) => p.email.toLowerCase()).toList(),
         'status': status.name,
@@ -256,6 +338,12 @@ class Ticket {
         tax: (m['tax'] as num? ?? 0).toInt(),
         serviceCharge: (m['serviceCharge'] as num? ?? 0).toInt(),
         tip: (m['tip'] as num? ?? 0).toInt(),
+        country: m['country'] as String? ?? 'MY',
+        taxType: m['taxType'] as String? ?? 'SST',
+        printedTotal: (m['printedTotal'] as num?)?.toInt(),
+        reconciliationDiscrepancy: (m['reconciliationDiscrepancy'] as num? ?? 0).toInt(),
+        requiresReview: m['requiresReview'] as bool? ?? false,
+        splitPolicy: m['splitPolicy'] as String? ?? 'proportional',
         participants: (m['participants'] as List)
             .map((e) => Participant.fromMap(Map<String, dynamic>.from(e as Map)))
             .toList(),
