@@ -58,20 +58,6 @@ class _TicketBody extends ConsumerWidget {
     return ref.read(ticketRepositoryProvider).save(ticket.copyWith(participants: ps).recalculated());
   }
 
-  Future<void> _addParticipant(BuildContext context, WidgetRef ref) async {
-    final participant = await showDialog<Participant>(
-      context: context,
-      builder: (ctx) => const _AddParticipantDialog(),
-    );
-    if (participant == null) return;
-
-    final ps = [
-      ...ticket.participants,
-      participant,
-    ];
-    await ref.read(ticketRepositoryProvider).save(ticket.copyWith(participants: ps).recalculated());
-  }
-
   Future<void> _launchEmailApp(Participant p, Ticket ticket) async {
     final subject = 'Payment Reminder: ${ticket.title.isEmpty ? 'Bill' : ticket.title}';
     final body = NotificationService.formatEmailBreakdown(ticket, p);
@@ -255,19 +241,20 @@ class _TicketBody extends ConsumerWidget {
             title: const Text('Service Charge'),
             trailing: Text(Money.format(ticket.serviceCharge, ticket.currency)),
           ),
+        if (ticket.tip != 0)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: const Text('Rounding Adjustment'),
+            trailing: Text(Money.format(ticket.tip, ticket.currency)),
+          ),
         const Divider(height: 32),
         Row(
           children: [
             Text('Participants', style: theme.textTheme.titleMedium),
-            const Spacer(),
-            if (isOwner)
-              TextButton.icon(
-                onPressed: () => _addParticipant(context, ref),
-                icon: const Icon(Icons.person_add_alt),
-                label: const Text('Add'),
-              ),
           ],
         ),
+        const SizedBox(height: 8),
         for (var i = 0; i < ticket.participants.length; i++)
           Builder(builder: (context) {
             final p = ticket.participants[i];
@@ -305,68 +292,3 @@ class _TicketBody extends ConsumerWidget {
     );
   }
 }
-
-class _AddParticipantDialog extends StatefulWidget {
-  const _AddParticipantDialog();
-
-  @override
-  State<_AddParticipantDialog> createState() => _AddParticipantDialogState();
-}
-
-class _AddParticipantDialogState extends State<_AddParticipantDialog> {
-  final _name = TextEditingController();
-  final _email = TextEditingController();
-
-  @override
-  void dispose() {
-    _name.dispose();
-    _email.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    final n = _name.text.trim();
-    final e = _email.text.trim().toLowerCase();
-    if (n.isEmpty || !e.contains('@')) return;
-
-    Navigator.pop(
-      context,
-      Participant(name: n, email: e, share: 0, paid: false),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Add participant'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _name,
-              decoration: const InputDecoration(labelText: 'Name'),
-              autofocus: true,
-            ),
-            TextField(
-              controller: _email,
-              keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(labelText: 'Email'),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: _submit,
-          child: const Text('Add'),
-        ),
-      ],
-    );
-  }
-}
-
