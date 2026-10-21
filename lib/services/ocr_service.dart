@@ -5,7 +5,8 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'ocr_rows.dart';
 
 /// On-device OCR using Google ML Kit (Android / iOS only).
-/// Supports English, Malay, and Chinese characters on Asian receipts.
+/// Returns the receipt as one string with one line per *visual row*, which
+/// is what [BillParser] expects ("name  qty  amount" on the same line).
 class OcrService {
   Future<String> readText(String imagePath) async {
     TextRecognizer recognizer;
@@ -16,7 +17,15 @@ class OcrService {
     }
 
     try {
-      final result = await recognizer.processImage(InputImage.fromFilePath(imagePath));
+      RecognizedText result;
+      try {
+        result = await recognizer.processImage(InputImage.fromFilePath(imagePath));
+      } catch (_) {
+        // Fallback to Latin recognizer if Chinese model fails on device
+        await recognizer.close();
+        recognizer = TextRecognizer(script: TextRecognitionScript.latin);
+        result = await recognizer.processImage(InputImage.fromFilePath(imagePath));
+      }
 
       final angles = <double>[];
       for (final block in result.blocks) {
