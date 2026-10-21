@@ -5,16 +5,19 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'ocr_rows.dart';
 
 /// On-device OCR using Google ML Kit (Android / iOS only).
-///
-/// Returns the receipt as one string with one line per *visual row*, which
-/// is what [BillParser] expects ("name  qty  amount" on the same line).
+/// Supports English, Malay, and Chinese characters on Asian receipts.
 class OcrService {
   Future<String> readText(String imagePath) async {
-    final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
+    TextRecognizer recognizer;
+    try {
+      recognizer = TextRecognizer(script: TextRecognitionScript.chinese);
+    } catch (_) {
+      recognizer = TextRecognizer(script: TextRecognitionScript.latin);
+    }
+
     try {
       final result = await recognizer.processImage(InputImage.fromFilePath(imagePath));
 
-      // Estimate how much the photo is tilted from the baseline of each line.
       final angles = <double>[];
       for (final block in result.blocks) {
         for (final line in block.lines) {
@@ -32,8 +35,6 @@ class OcrService {
       final cosT = math.cos(tilt);
       final sinT = math.sin(tilt);
 
-      // Rotate every word's position by -tilt so rows become horizontal,
-      // then group words that share a row.
       final pieces = <OcrPiece>[];
       for (final block in result.blocks) {
         for (final line in block.lines) {
@@ -42,8 +43,8 @@ class OcrService {
             final left = el.boundingBox.left;
             pieces.add(OcrPiece(
               el.text,
-              left * cosT + c.dy * sinT, // rotated x (left edge)
-              -c.dx * sinT + c.dy * cosT, // rotated y (vertical centre)
+              left * cosT + c.dy * sinT,
+              -c.dx * sinT + c.dy * cosT,
               el.boundingBox.height,
             ));
           }

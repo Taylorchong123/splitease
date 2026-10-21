@@ -140,14 +140,6 @@ class _TicketsScreenState extends ConsumerState<TicketsScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _newTicket,
-        backgroundColor: const Color(0xFF1B6EF3),
-        foregroundColor: Colors.white,
-        elevation: 4,
-        icon: const Icon(Icons.add),
-        label: const Text('New bill', style: TextStyle(fontWeight: FontWeight.bold)),
-      ),
       body: tickets.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Something went wrong: $e')),
@@ -285,7 +277,7 @@ class _TicketsScreenState extends ConsumerState<TicketsScreen> {
                 'Recent Bills',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: const Color(0xFF0F172A),
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
               ),
               const SizedBox(height: 12),
@@ -405,10 +397,10 @@ class _TicketsScreenState extends ConsumerState<TicketsScreen> {
                                 ),
                                 Text(
                                   Money.format(t.total, t.currency),
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 16,
-                                    color: Color(0xFF0F172A),
+                                    color: Theme.of(context).colorScheme.onSurface,
                                   ),
                                 ),
                               ],

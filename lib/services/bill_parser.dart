@@ -74,13 +74,17 @@ class BillParser {
     'tendered', 'debit', 'qty', 'pax', 'table', 'cashier', 'document no',
     'card no', 'invoice', 'tax invoice', 'thank you', 'powered by', 'scan this',
   ];
-  static const _taxWords = ['tax', 'gst', 'vat', 'sst'];
+
   static final _serviceRegex = RegExp(
-    r'service\s*[\(\.\-\_]?\s*charge|serv\s*charge|svc\s*charge|service\s*chg|service\s*fee|\bservice\b',
+    r'service\s*[\(\.\-\_]?\s*charge|serv\s*charge|svc\s*charge|service\s*chg|service\s*fee',
+    caseSensitive: false,
+  );
+  static final _taxRegex = RegExp(
+    r'service\s*tax|\btax\b|\bgst\b|\bvat\b|\bsst\b',
     caseSensitive: false,
   );
   static const _discountWords = ['discount', 'less'];
-  static const _roundingWords = ['rounding', 'round adj', 'rnd adj'];
+  static const _roundingWords = ['rounding', 'round adj', 'rnd adj', 'bill rounding'];
   static const _totalWords = ['total', 'amount due', 'rounded total'];
   static const _subtotalWords = ['subtotal', 'sub total'];
   static const _voidWords = ['void', 'cancelled', 'complimentary', 'comp'];
@@ -106,6 +110,15 @@ class BillParser {
     String? tableNumber;
 
     for (final rawLine in lines) {
+      final lowerRaw = rawLine.toLowerCase();
+
+      // Stop parsing duplicate charges summary blocks at the bottom of POS receipts
+      if (lowerRaw.contains('charges summary') ||
+          lowerRaw.contains('tax summary') ||
+          lowerRaw.contains('base amt.')) {
+        break;
+      }
+
       // Metadata extractions
       receiptNumber ??= _extractReceiptNumber(rawLine);
       transactionDate ??= _extractDate(rawLine);
@@ -157,7 +170,7 @@ class BillParser {
         serviceCharge += amount;
         continue;
       }
-      if (_taxWords.any(lower.contains)) {
+      if (_taxRegex.hasMatch(lower)) {
         tax += amount;
         continue;
       }
