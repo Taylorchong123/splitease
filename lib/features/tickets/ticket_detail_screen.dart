@@ -1,14 +1,11 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/currencies.dart';
 import '../../core/money.dart';
 import '../../models/ticket.dart';
 import '../../providers.dart';
-import '../../services/notification_service.dart';
 import 'tickets_screen.dart' show buildStatusBadge;
 
 class TicketDetailScreen extends ConsumerWidget {
@@ -223,24 +220,6 @@ class _SelectNotificationParticipantsSheetState
     _selectedEmails = widget.unpaid.map((p) => p.email.toLowerCase()).toSet();
   }
 
-  Future<void> _launchEmailApp(Participant p) async {
-    final subject = 'Payment Reminder: ${widget.ticket.title.isEmpty ? 'Bill' : widget.ticket.title}';
-    final body = NotificationService.formatEmailBreakdown(widget.ticket, p);
-
-    final mailUri = Uri(
-      scheme: 'mailto',
-      path: p.email,
-      queryParameters: {
-        'subject': subject,
-        'body': body,
-      },
-    );
-
-    if (await canLaunchUrl(mailUri)) {
-      await launchUrl(mailUri);
-    }
-  }
-
   Future<void> _send() async {
     if (_selectedEmails.isEmpty) return;
 
@@ -281,7 +260,7 @@ class _SelectNotificationParticipantsSheetState
               Text('Select Participants to Notify', style: theme.textTheme.titleMedium),
               const SizedBox(height: 4),
               Text(
-                'Select who should receive payment reminders and email breakdowns.',
+                'Select who should receive payment reminders.',
                 style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.outline),
               ),
               const SizedBox(height: 16),
@@ -293,69 +272,53 @@ class _SelectNotificationParticipantsSheetState
 
                   return Card(
                     margin: const EdgeInsets.only(bottom: 10),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Checkbox(
-                                value: isSelected,
-                                onChanged: (checked) {
-                                  setState(() {
-                                    if (checked == true) {
-                                      _selectedEmails.add(emailNorm);
-                                    } else {
-                                      _selectedEmails.remove(emailNorm);
-                                    }
-                                  });
-                                },
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () {
+                        setState(() {
+                          if (isSelected) {
+                            _selectedEmails.remove(emailNorm);
+                          } else {
+                            _selectedEmails.add(emailNorm);
+                          }
+                        });
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        child: Row(
+                          children: [
+                            Checkbox(
+                              value: isSelected,
+                              onChanged: (checked) {
+                                setState(() {
+                                  if (checked == true) {
+                                    _selectedEmails.add(emailNorm);
+                                  } else {
+                                    _selectedEmails.remove(emailNorm);
+                                  }
+                                });
+                              },
+                            ),
+                            CircleAvatar(
+                              radius: 16,
+                              child: Text(p.name.isEmpty ? '?' : p.name[0].toUpperCase()),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  Text(p.email, style: theme.textTheme.bodySmall),
+                                ],
                               ),
-                              CircleAvatar(
-                                radius: 14,
-                                child: Text(p.name.isEmpty ? '?' : p.name[0].toUpperCase()),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                                    Text(p.email, style: theme.textTheme.bodySmall),
-                                  ],
-                                ),
-                              ),
-                              Text(
-                                Money.format(p.share, widget.ticket.currency),
-                                style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              OutlinedButton.icon(
-                                icon: const Icon(Icons.copy, size: 16),
-                                label: const Text('Copy Text'),
-                                onPressed: () {
-                                  final text = NotificationService.formatEmailBreakdown(widget.ticket, p);
-                                  Clipboard.setData(ClipboardData(text: text));
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('Copied email text for ${p.name}')),
-                                  );
-                                },
-                              ),
-                              const SizedBox(width: 8),
-                              FilledButton.icon(
-                                icon: const Icon(Icons.mail_outline, size: 16),
-                                label: const Text('Open Email App'),
-                                onPressed: () => _launchEmailApp(p),
-                              ),
-                            ],
-                          ),
-                        ],
+                            ),
+                            Text(
+                              Money.format(p.share, widget.ticket.currency),
+                              style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   );
