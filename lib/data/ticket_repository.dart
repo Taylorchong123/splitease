@@ -38,16 +38,27 @@ class TicketRepository {
 
   Future<void> delete(String id) => _tickets.doc(id).delete();
 
-  /// Queues one notification per unpaid participant with their full itemized breakdown.
+  /// Queues notifications for unpaid participants (or a selected subset) with their full itemized breakdown.
   /// A Cloud Function (see functions/index.js) delivers them via push / email.
-  Future<void> queueNotifications(Ticket ticket) async {
+  Future<void> queueNotifications(
+    Ticket ticket, {
+    List<String>? selectedEmails,
+  }) async {
     final batch = _db.batch();
     final owner = ticket.participants.firstWhere(
       (p) => p.isOwner,
       orElse: () => ticket.participants.first,
     );
 
-    for (final p in ticket.participants.where((p) => !p.isOwner && !p.paid)) {
+    final targets = ticket.participants.where((p) {
+      if (p.isOwner || p.paid) return false;
+      if (selectedEmails != null && selectedEmails.isNotEmpty) {
+        return selectedEmails.contains(p.email.toLowerCase());
+      }
+      return true;
+    });
+
+    for (final p in targets) {
       final pEmail = p.email.toLowerCase();
 
       final assignedItems = ticket.items.where((i) {

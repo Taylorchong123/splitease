@@ -58,117 +58,18 @@ class _TicketBody extends ConsumerWidget {
     return ref.read(ticketRepositoryProvider).save(ticket.copyWith(participants: ps).recalculated());
   }
 
-  Future<void> _launchEmailApp(Participant p, Ticket ticket) async {
-    final subject = 'Payment Reminder: ${ticket.title.isEmpty ? 'Bill' : ticket.title}';
-    final body = NotificationService.formatEmailBreakdown(ticket, p);
-
-    final mailUri = Uri(
-      scheme: 'mailto',
-      path: p.email,
-      queryParameters: {
-        'subject': subject,
-        'body': body,
-      },
-    );
-
-    if (await canLaunchUrl(mailUri)) {
-      await launchUrl(mailUri);
-    }
-  }
-
   Future<void> _notify(BuildContext context, WidgetRef ref) async {
-    await ref.read(ticketRepositoryProvider).queueNotifications(ticket);
-    if (!context.mounted) return;
-
     final unpaid = ticket.participants.where((p) => !p.isOwner && !p.paid).toList();
+    if (unpaid.isEmpty) return;
 
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text('Payment Reminders Queued', style: Theme.of(ctx).textTheme.titleMedium),
-                const SizedBox(height: 8),
-                Text(
-                  'Notifications and email reminders with bill breakdowns were queued for ${unpaid.length} participant(s).',
-                  style: Theme.of(ctx).textTheme.bodyMedium,
-                ),
-                const SizedBox(height: 16),
-                Text('Send or Copy Email Breakdown:', style: Theme.of(ctx).textTheme.labelLarge),
-                const SizedBox(height: 8),
-                for (final p in unpaid) ...[
-                  Card(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              CircleAvatar(
-                                radius: 14,
-                                child: Text(p.name.isEmpty ? '?' : p.name[0].toUpperCase()),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                                    Text(p.email, style: Theme.of(ctx).textTheme.bodySmall),
-                                  ],
-                                ),
-                              ),
-                              Text(
-                                Money.format(p.share, ticket.currency),
-                                style: Theme.of(ctx).textTheme.titleSmall,
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              OutlinedButton.icon(
-                                icon: const Icon(Icons.copy, size: 16),
-                                label: const Text('Copy Text'),
-                                onPressed: () {
-                                  final text = NotificationService.formatEmailBreakdown(ticket, p);
-                                  Clipboard.setData(ClipboardData(text: text));
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('Copied email for ${p.name}')),
-                                  );
-                                },
-                              ),
-                              const SizedBox(width: 8),
-                              FilledButton.icon(
-                                icon: const Icon(Icons.mail_outline, size: 16),
-                                label: const Text('Open Email App'),
-                                onPressed: () => _launchEmailApp(p, ticket),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Done'),
-                ),
-              ],
-            ),
-          ),
-        ),
+      builder: (ctx) => _SelectNotificationParticipantsSheet(
+        ticket: ticket,
+        unpaid: unpaid,
+        ref: ref,
+        parentContext: context,
       ),
     );
   }
@@ -289,6 +190,198 @@ class _TicketBody extends ConsumerWidget {
             label: const Text('Notify unpaid participants'),
           ),
       ],
+    );
+  }
+}
+
+class _SelectNotificationParticipantsSheet extends StatefulWidget {
+  const _SelectNotificationParticipantsSheet({
+    required this.ticket,
+    required this.unpaid,
+    required this.ref,
+    required this.parentContext,
+  });
+
+  final Ticket ticket;
+  final List<Participant> unpaid;
+  final WidgetRef ref;
+  final BuildContext parentContext;
+
+  @override
+  State<_SelectNotificationParticipantsSheet> createState() =>
+      _SelectNotificationParticipantsSheetState();
+}
+
+class _SelectNotificationParticipantsSheetState
+    extends State<_SelectNotificationParticipantsSheet> {
+  late Set<String> _selectedEmails;
+  bool _sending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedEmails = widget.unpaid.map((p) => p.email.toLowerCase()).toSet();
+  }
+
+  Future<void> _launchEmailApp(Participant p) async {
+    final subject = 'Payment Reminder: ${widget.ticket.title.isEmpty ? 'Bill' : widget.ticket.title}';
+    final body = NotificationService.formatEmailBreakdown(widget.ticket, p);
+
+    final mailUri = Uri(
+      scheme: 'mailto',
+      path: p.email,
+      queryParameters: {
+        'subject': subject,
+        'body': body,
+      },
+    );
+
+    if (await canLaunchUrl(mailUri)) {
+      await launchUrl(mailUri);
+    }
+  }
+
+  Future<void> _send() async {
+    if (_selectedEmails.isEmpty) return;
+
+    setState(() => _sending = true);
+    try {
+      await widget.ref.read(ticketRepositoryProvider).queueNotifications(
+            widget.ticket,
+            selectedEmails: _selectedEmails.toList(),
+          );
+
+      if (!mounted) return;
+      Navigator.pop(context);
+
+      ScaffoldMessenger.of(widget.parentContext).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Payment reminder sent to ${_selectedEmails.length} participant(s)!',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Select Participants to Notify', style: theme.textTheme.titleMedium),
+              const SizedBox(height: 4),
+              Text(
+                'Select who should receive payment reminders and email breakdowns.',
+                style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.outline),
+              ),
+              const SizedBox(height: 16),
+
+              for (final p in widget.unpaid) ...[
+                Builder(builder: (context) {
+                  final emailNorm = p.email.toLowerCase();
+                  final isSelected = _selectedEmails.contains(emailNorm);
+
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Checkbox(
+                                value: isSelected,
+                                onChanged: (checked) {
+                                  setState(() {
+                                    if (checked == true) {
+                                      _selectedEmails.add(emailNorm);
+                                    } else {
+                                      _selectedEmails.remove(emailNorm);
+                                    }
+                                  });
+                                },
+                              ),
+                              CircleAvatar(
+                                radius: 14,
+                                child: Text(p.name.isEmpty ? '?' : p.name[0].toUpperCase()),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    Text(p.email, style: theme.textTheme.bodySmall),
+                                  ],
+                                ),
+                              ),
+                              Text(
+                                Money.format(p.share, widget.ticket.currency),
+                                style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              OutlinedButton.icon(
+                                icon: const Icon(Icons.copy, size: 16),
+                                label: const Text('Copy Text'),
+                                onPressed: () {
+                                  final text = NotificationService.formatEmailBreakdown(widget.ticket, p);
+                                  Clipboard.setData(ClipboardData(text: text));
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Copied email text for ${p.name}')),
+                                  );
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              FilledButton.icon(
+                                icon: const Icon(Icons.mail_outline, size: 16),
+                                label: const Text('Open Email App'),
+                                onPressed: () => _launchEmailApp(p),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+              ],
+
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: _selectedEmails.isEmpty || _sending ? null : _send,
+                icon: _sending
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.send_rounded),
+                label: Text(
+                  _sending
+                      ? 'Sending...'
+                      : 'Send Reminders (${_selectedEmails.length})',
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
