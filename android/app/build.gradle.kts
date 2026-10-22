@@ -41,16 +41,10 @@ android {
     }
 }
 
-kotlin {
-    compilerOptions {
-        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    kotlinOptions {
+        jvmTarget = "17"
     }
-}
 
 flutter {
     source = "../.."
-}
-
-dependencies {
-    implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
 }

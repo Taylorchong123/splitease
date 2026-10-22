@@ -53,3 +53,7 @@ GoogleService-Info.plist
 functions/.env
 functions/node_modules/
 functions/npm-debug.log
+
+# Compiled Binaries & Releases
+*.apk
+/releases/

@@ -1,200 +1,109 @@
-<div align="center">
+# 💸 SplitEase — Smart F&B Receipt Scanner & Bill Splitting App
 
-# 💸 SplitEase
+**SplitEase** is a cross-platform Flutter application designed to make splitting restaurant and café bills effortless, accurate, and fair across **Malaysia** and **Singapore**.
 
-**Scan a bill, add your friends, assign dishes, split fairly, and notify everyone with an itemized breakdown.**
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
-[![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?style=flat-square&logo=flutter&logoColor=white)](https://flutter.dev/)
-[![Dart](https://img.shields.io/badge/Dart-3.x-0175C2?style=flat-square&logo=dart&logoColor=white)](https://dart.dev/)
-[![Firebase](https://img.shields.io/badge/Firebase-Auth%20%7C%20Firestore%20%7C%20FCM-FFCA28?style=flat-square&logo=firebase&logoColor=black)](https://firebase.google.com/)
-
-</div>
+Powered by **Google ML Kit OCR**, **Firebase Cloud Functions**, and deterministic exact-cent financial math, SplitEase handles complex F&B receipt structures—including English, Malay, and Chinese text, discounts, service charges, SST/GST taxes, rounding adjustments, and multi-currency conversions.
 
 ---
 
-## 📖 Table of Contents
+## 📲 Download the App (Bundled APK)
 
-- [About](#-about)
-- [Features](#-features)
-- [Tech Stack](#-tech-stack)
-- [Architecture](#-architecture)
-- [Project Structure](#-project-structure)
-- [Getting Started](#-getting-started)
-- [Data Model](#-data-model)
-- [Testing](#-testing)
-- [Roadmap](#-roadmap)
-- [License](#-license)
+You can download and test the pre-compiled Android APK directly from the repository:
+
+👉 **[Download SplitEase Android APK (releases/splitease-app.apk)](releases/splitease-app.apk)**
+
+### Installation Instructions
+1. Download `splitease-app.apk` on your Android device.
+2. Tap the downloaded file to install. (Enable *"Install from Unknown Sources"* in your browser settings if prompted).
+3. Open SplitEase, sign in via **Google Sign-In** or **Email**, and start scanning bills!
 
 ---
 
-## 🎯 About
+## 🌟 Key Features
 
-Splitting a bill after a group dinner, a trip, a grocery run, or a utility invoice is awkward: someone pays up front, someone forgets, and the chasing begins.
+### 🧾 1. Multi-Language F&B OCR Receipt Scanning
+* **Trilingual OCR**: Uses Google ML Kit with Chinese and Latin script recognition to parse English, Malay, and Chinese character dishes (e.g. `肉碎蛋酒面线汤`, `咸蛋虾仁烩饭`, `红糖桂圆凉茶`).
+* **Smart Structure Recognition**: Automatically detects merchants, item unit prices, quantities, subtotal, SST (6% MY) / GST (9% SG), 10% Service Charge, item discounts, and rounding adjustments.
+* **Header & Summary Filter**: Intelligently ignores duplicate POS `Charges summary` footer blocks to prevent double-counting taxes.
 
-**SplitEase** is a modern cross-platform Flutter app. Snap a photo of any physical bill or key it in manually, add participants, assign individual dishes/items to specific people, calculate proportional tax and totals, and send push notifications and itemized email reminders. Every bill is tracked as a **ticket** with status updates from draft to settled.
+### 🧮 2. Proportional Tax & Service Charge Math
+* **Separate Charges**: Keeps Tax (SST/GST) and Service Charge strictly separated.
+* **Food-Weighted Allocation**: Tax and Service Charge are allocated proportionally to each participant based on the value of food they ate using `Money.allocate()` (largest-remainder method).
+* **Exact-Cent Matching**: Guaranteed zero rounding loss; sum of participant shares matches the printed venue receipt total down to the exact cent.
+* **Arithmetic Reconciliation**: Calculates printed total vs sum of line items. Displays a `⚠️ Reconciliation Warning` if an unexplained receipt discrepancy exists.
 
----
+### 👥 3. Participant-First Flow & Dish Assignment
+* Add participants sharing the bill first, then assign dishes with interactive filter chips.
+* **Equal Split Default**: Unassigned items or equal split policies automatically divide the total evenly across all participants (`MYR 173.90` / 2 = `MYR 86.95` each).
 
-## ✨ Features
+### 🔔 4. Interactive Notification Workflow
+* Tapping **Notify Unpaid Participants** opens a participant selector sheet.
+* Select specific unpaid participants before queueing and sending payment reminders.
+* Triggers Firebase Cloud Functions (v2) to deliver push notifications (FCM) and itemized HTML email breakdowns via Nodemailer.
 
-| Feature | Description |
-|---|---|
-| 🔐 **User Authentication** | Email/password and **Google Sign-In**, both via Firebase Auth. |
-| 🧾 **OCR Bill Scanning** | On-device OCR (Google ML Kit) reads items, quantities, prices, tax, and totals from a photo. |
-| 👥 **Add Participants First** | Invite friends by name and email before assigning items. |
-| 🍕 **Individual Food Assignment** | Assign individual dishes to specific participants using interactive chips, or split equally among everyone. |
-| 🌍 **Multi-Currency** | Each bill has its own currency with live rate snapshots. |
-| 🗑️ **Slide to Delete** | Swipe left on any ticket in your list to delete unwanted bills with confirmation. |
-| 🔔 **Itemized Email Reminders** | Sends push notifications and styled HTML email breakdowns via Firebase Cloud Functions. |
-| 🎫 **Ticket Status Lifecycle** | Track bills seamlessly across `draft → open → partiallyPaid → settled`. |
-
----
-
-## 🛠 Tech Stack
-
-| Layer | Technology |
-|---|---|
-| **App Framework** | Flutter 3, Dart 3, Material 3 |
-| **State Management** | Riverpod |
-| **Authentication** | Firebase Authentication |
-| **Database** | Cloud Firestore |
-| **Cloud Backend & Emails** | Firebase Cloud Functions (Node 20) + Nodemailer |
-| **Push Notifications** | Firebase Cloud Messaging (FCM) |
-| **OCR Text Recognition** | `google_mlkit_text_recognition` (on-device) |
-| **Exchange Rates** | Open exchange rates API, cached in memory |
+### 🌐 5. Multi-Currency & Dark Mode Brand UI
+* Supports MYR, SGD, USD, EUR, GBP, JPY, and real-time exchange rate snapshot conversion.
+* High-contrast dark theme styled with Electric Blue (`#1B6EF3`), Mint Teal (`#00C897`), and Gold Amber (`#FFB800`).
 
 ---
 
-## 🏗 Architecture
+## 🚀 Future Roadmap: Third-Party WhatsApp API Integration
 
-```
-┌────────────────────────────── Flutter app ──────────────────────────────┐
-│  UI (features/*)  ──▶  Riverpod providers  ──▶  Repositories/Services   │
-│  login · tickets · scan · create · detail        TicketRepository        │
-│                                                  OcrService · BillParser │
-│                                                  CurrencyService         │
-└───────────────┬───────────────────────────────────────┬─────────────────┘
-                │ Auth / Firestore                      │ HTTPS
-                ▼                                       ▼
-        ┌───────────────┐                       ┌───────────────┐
-        │   Firebase    │                       │  Rates API    │
-        │ Auth·Firestore│                       └───────────────┘
-        └───────┬───────┘
-                │ onCreate: notifications/{id}
-                ▼
-        ┌────────────────────┐
-        │  Cloud Function    │──▶ FCM Push + Itemized HTML Email
-        └────────────────────┘
-```
+In upcoming updates, SplitEase will integrate with **Third-Party WhatsApp Cloud API** (Meta WhatsApp Business API / Twilio) to replace and complement email reminders:
 
-**Key Design Decisions**
-
-- **Money is stored as integers in minor units** (cents) with ISO-4217 codes to avoid floating-point rounding errors.
-- **Proportional tax & tip allocation** distributes tax fairly based on each participant's food subtotal.
-- **Largest-remainder allocation** distributes leftover cents deterministically.
-- **Decoupled notifications**: The client queues requests to Firestore; Cloud Functions send FCM push notifications and HTML emails asynchronously.
+* 💬 **Instant WhatsApp Payment Reminders**: Send formatted payment reminders directly to participants' WhatsApp numbers with a single tap.
+* 📋 **Rich Itemized WhatsApp Breakdowns**: Deliver clean, formatted WhatsApp text templates detailing exactly which dishes each participant ordered, their proportional tax/service charge share, and payment details.
+* 🔗 **1-Tap Payment Links**: Include direct Touch 'n Go eWallet, DuitNow QR, or PayNow links directly inside the WhatsApp reminder message.
 
 ---
 
-## 📁 Project Structure
+## 🛠️ Tech Stack & Architecture
 
-```
-lib/
-├── main.dart
-├── app.dart                   # MaterialApp + AuthGate
-├── providers.dart             # Riverpod providers
-├── core/
-│   ├── money.dart             # parse/format/allocate/convert
-│   └── currencies.dart
-├── models/ticket.dart         # Ticket, TicketItem, Participant
-├── data/ticket_repository.dart
-├── services/
-│   ├── ocr_service.dart       # ML Kit text recognition
-│   ├── bill_parser.dart       # OCR text → items/tax/total
-│   ├── currency_service.dart
-│   └── notification_service.dart
-└── features/
-    ├── auth/login_screen.dart
-    └── tickets/
-        ├── tickets_screen.dart
-        ├── scan_screen.dart
-        ├── create_ticket_screen.dart
-        └── ticket_detail_screen.dart
-functions/                     # Cloud Function: deliver push & email reminders
-firestore.rules
-test/                          # unit tests
-```
+* **Framework**: Flutter 3 (Dart 3)
+* **State Management**: Flutter Riverpod 2.6
+* **Backend**: Firebase Auth, Cloud Firestore, Firebase Messaging (FCM)
+* **Serverless Backend**: Firebase Cloud Functions v2 (Node.js 22 + Nodemailer)
+* **On-Device OCR**: Google ML Kit Text Recognition (`script: TextRecognitionScript.chinese`)
+* **Utilities**: `url_launcher`, `intl`, `http`
 
 ---
 
-## 🚀 Getting Started
+## 💻 Developer Setup Guide
 
-Check [SETUP_NOTES.txt](SETUP_NOTES.txt) for a step-by-step setup guide.
+### 1. Prerequisites
+* Flutter SDK (3.24 or higher)
+* Android Studio / Xcode
+* Node.js 22 (for Cloud Functions)
+* Firebase CLI (`npm install -g firebase-tools`)
 
-### Quick Commands
-
+### 2. Running Locally
 ```bash
-# 1. Install dependencies
+git clone https://github.com/Taylorchong123/splitease.git
+cd splitease
 flutter pub get
-
-# 2. Configure Firebase (generates lib/firebase_options.dart)
-flutterfire configure
-
-# 3. Deploy Cloud Functions and Security Rules
-firebase deploy --only firestore:rules,functions
-
-# 4. Run automated unit tests
-flutter test
-
-# 5. Launch app
 flutter run
 ```
 
----
-
-## 🗄 Data Model
-
-```
-tickets/{id}
-  ownerId, title, currency (ISO-4217), source (scan|manual), status
-  items[]        { name, amount (minor units), quantity, assignedEmails[] }
-  tax, tip       (minor units)
-  participants[] { name, email, share, paid, isOwner }
-  memberEmails[] (for "tickets shared with me" queries)
-  fxRates        (snapshot at creation)
-  createdAt
-
-users/{uid}            { email, fcmTokens[] }
-notifications/{id}     { ticketId, title, toName, toEmail, ownerName, ownerEmail, amount, currency, items[], tax, subtotal, createdAt }
-```
-
----
-
-## 🧪 Testing
-
+### 3. Running Unit Tests & Static Analysis
 ```bash
-flutter test          # unit tests (money maths, bill parser, item assignment)
-flutter analyze       # static analysis
+flutter test
+flutter analyze
 ```
 
----
-
-## 🗺 Roadmap
-
-- [x] Email/password login
-- [x] Google Sign-In
-- [x] Manual bill entry
-- [x] Multi-currency with rate snapshot
-- [x] OCR scanning with review step
-- [x] Add participants first & assign specific food items
-- [x] Slide to delete ticket (with confirmation)
-- [x] Itemized email reminders & push notifications via Cloud Functions
-- [ ] Payment QR / PayNow / DuitNow details on tickets
-- [ ] Localisation (i18n)
+### 4. Firebase Cloud Functions Setup
+1. Create `functions/.env`:
+   ```env
+   EMAIL_SERVICE=gmail
+   EMAIL_USER=your-email@gmail.com
+   EMAIL_PASS=your-16-digit-app-password
+   ```
+2. Deploy Cloud Functions:
+   ```bash
+   firebase deploy --only functions
+   ```
 
 ---
 
 ## 📄 License
 
-Distributed under the MIT License. See [`LICENSE`](LICENSE).
+Distributed under the MIT License. See `LICENSE` for more information.
