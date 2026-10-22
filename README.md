@@ -8,12 +8,16 @@ Powered by **Google ML Kit OCR**, **Firebase Cloud Functions**, and deterministi
 
 ## 📲 Download the App (Bundled APK)
 
-You can download and test the pre-compiled Android APK directly from the repository:
+You can download and test the pre-compiled Android APK directly from GitHub Releases:
 
-👉 **[Download SplitEase Android APK (releases/splitease-app.apk)](releases/splitease-app.apk)**
+👉 **[Download SplitEase Android APK (v1.0.0)](https://github.com/Taylorchong123/splitease/releases/latest)**
+
+### Local File Location
+The compiled APK file is stored locally on your machine at:
+`C:\src\flutterProject\splitease\releases\splitease-app.apk`
 
 ### Installation Instructions
-1. Download `splitease-app.apk` on your Android device.
+1. Download `splitease-app.apk` from [GitHub Releases](https://github.com/Taylorchong123/splitease/releases/latest) on your Android device.
 2. Tap the downloaded file to install. (Enable *"Install from Unknown Sources"* in your browser settings if prompted).
 3. Open SplitEase, sign in via **Google Sign-In** or **Email**, and start scanning bills!
 
