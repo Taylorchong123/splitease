@@ -41,10 +41,6 @@ android {
     }
 }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
 flutter {
     source = "../.."
 }
